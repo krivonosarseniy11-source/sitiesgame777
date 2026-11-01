@@ -1,0 +1,11 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {Engine,norm,last}=require('./engine.js');
+const fs=require('node:fs');const data=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../docs/cities.json'),'utf8'));const e=new Engine(data);
+const state=(extra={})=>({used:[],letter:'',turns:0,mode:'classic',finished:false,...extra});
+test('normalization and final letter',()=>{assert.equal(norm(' Орёл '),'орел');assert.equal(norm('Санкт-Петербург'),'санкт петербург');assert.equal(last('Пермь'),'м');});
+test('real cities and chain',()=>{const r=e.move('Москва',state(),()=>0);assert.equal(r.city.n,'Москва');assert.equal(norm(r.reply.n)[0],'а');assert.equal(r.state.letter,last(r.reply.n));assert.equal(r.state.turns,1);});
+test('unknown, wrong letter, repeats, aliases',()=>{assert.throws(()=>e.move('asdf',state()));assert.throws(()=>e.move('Москва',state({letter:'я'})));let r=e.move('Москва',state());assert.throws(()=>e.move('москва',r.state),/уже/);});
+test('Russia restricts input and replies',()=>{assert.throws(()=>e.move('Париж',state({mode:'russia'})),/России/);assert.equal(e.move('Москва',state({mode:'russia'})).reply.cc,'RU');});
+test('daily ends after 10 turns',()=>{assert.equal(e.move('Москва',state({mode:'daily',turns:9})).state.finished,true);});
+test('invalid move does not mutate original',()=>{const s=state({letter:'я'});const before=JSON.stringify(s);assert.throws(()=>e.move('Москва',s));assert.equal(JSON.stringify(s),before);});
+test('finished games reject input',()=>{assert.throws(()=>e.move('Москва',state({finished:true})),/завершена/);});
+test('bot replies use explicit Russian names and exist in dictionary',()=>{const bots=data.filter(c=>c.bot);assert.ok(bots.length>150);for(const c of bots){assert.ok(e.index.has(norm(c.n)),c.n);assert.match(c.n,/^[А-ЯЁа-яё -]+$/);}});
